@@ -2,6 +2,7 @@
 #include <GyverPortal.h>
 #include <FastLED.h>
 #include "WiFi.h"
+#include "Math.h"
 
 // Global variables
 #define LED_PIN 26
@@ -32,7 +33,7 @@ String effects[6] = {
     "Rainbow LOOP",
     "Rainbow Fade",
     "Rainbow Cycle",
-    "Music",
+    "Fire",
     ""};
 
 void oneColorAll()
@@ -122,6 +123,20 @@ void rainbowCycle(){
   }
 }
 
+void Fire(){
+  if(lastmillis + SPEED < millis() && power){
+    int temprand;
+      for (int i = 0; i < LED_COUNT; i++ ) {
+        temprand = random(100, 255);
+        leds[i].r = temprand;
+        leds[i].b = 0; leds[i].g = 30;
+      }
+      LEDS.show();
+    FastLED.setBrightness(BRIGHT);
+    lastmillis = millis();
+  }
+};
+
 // конструктор страницы
 void build(GyverPortal &p)
 {
@@ -207,7 +222,16 @@ void build(GyverPortal &p)
     break;
   case 4:
     GP.BOX_BEGIN();
-    GP.SPAN("Not Available");
+    GP.SPAN("POWER:");
+    GP.SWITCH("POWER", power);
+    GP.BOX_END();
+    GP.BOX_BEGIN();
+    GP.SPAN("Brightness:");
+    GP.SLIDER("BRIGHT", BRIGHT, 0, 255);
+    GP.BOX_END();
+    GP.BOX_BEGIN();
+    GP.SPAN("Speed:");
+    GP.SLIDER("SPEED", SPEED, 0, 100, 2);
     GP.BOX_END();
     break;
   default:
@@ -241,32 +265,19 @@ void action(GyverPortal &p)
   }
 }
 
-void setup()
+void WebServerTask(void *pvParameters)
 {
-  Serial.begin(9600);
-  IPAddress ip(192, 168, 31, 239);
-  IPAddress gateway(192, 168, 31, 1);
-  IPAddress subnet(255, 255, 255, 0);
-
-  FastLED.addLeds<WS2811, LED_PIN, GRB>(leds, LED_COUNT).setCorrection(TypicalLEDStrip);
-
-
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(AP_SSID, AP_PASS);
-  WiFi.config(ip, gateway, subnet);
-  while (WiFi.status() != WL_CONNECTED)
-  {
-    delay(500);
-    Serial.print(".");
-  }
-  Serial.println(WiFi.localIP());
-
   GyverPortal ui;
   ui.attachBuild(build);
   ui.attach(action);
   ui.start();
+  while (ui.tick());
   Serial.println("Portal run");
-  while (ui.tick())
+}
+
+void LEDTask(void *pvParameters)
+{
+  while (true)
   {
     switch (currentEffect)
       {
@@ -283,14 +294,56 @@ void setup()
         rainbowCycle();
       break;
       case 4:
-      
+        Fire();
       break;
       default:
         
-        break;
+      break;
       }
   }
+}
+TaskHandle_t WebServerTaskHandle;
+TaskHandle_t LEDTaskHandle;
 
+void setup()
+{
+  Serial.begin(9600);
+  IPAddress ip(192, 168, 31, 239);
+  IPAddress gateway(192, 168, 31, 1);
+  IPAddress subnet(255, 255, 255, 0);
+
+  FastLED.addLeds<WS2811, LED_PIN, GRB>(leds, LED_COUNT).setCorrection(TypicalLEDStrip);
+
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(AP_SSID, AP_PASS);
+  WiFi.config(ip, gateway, subnet);
+  while (WiFi.status() != WL_CONNECTED)
+  {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println(WiFi.localIP());
+  Serial.println(xPortGetCoreID());
+
+  xTaskCreatePinnedToCore(
+      WebServerTask, 
+      "WebServerTask", 
+      10000,           
+      NULL,            
+      1,               
+      &WebServerTaskHandle,  
+      0                
+  );
+
+  xTaskCreatePinnedToCore(
+      LEDTask, 
+      "LEDTask", 
+      10000,           
+      NULL,           
+      1,              
+      &LEDTaskHandle,  
+      1               
+  );
   Serial.println("Setup end");
 }
 
