@@ -2,10 +2,10 @@
 #include <GyverPortal.h>
 #include <FastLED.h>
 #include "WiFi.h"
-#include "Math.h"
+#include "EEPROM.h"
 
 // Global variables
-#define LED_PIN 26
+#define LED_PIN 32
 #define LED_COUNT 180
 #define AP_SSID "Alien"
 #define AP_PASS "bezparolianehodi"
@@ -13,17 +13,26 @@
 // FastLED
 struct CRGB leds[LED_COUNT];
 
-int eff_index;
-bool power = true;
-int BRIGHT;
-float SPEED = 20;
+// EEPROM
+bool eepromFlag = false;
+unsigned long eepromTimer = 0;
+
 int STEP = 20;
 int ihue = 0;
 int thissat = 255;
 unsigned long lastmillis = 0;
-GPcolor rgb(0, 0, 0);
 
-int currentEffect = 0;
+
+struct Data {
+  int eff_index;
+  bool power;
+  int BRIGHT;
+  float SPEED = 50;
+  int currentEffect = 0;
+  GPcolor rgb;
+};
+
+Data data;
 
 GyverPortal ui;
 
@@ -40,9 +49,9 @@ void oneColorAll()
 { //-SET ALL LEDS TO ONE COLOR
   for (int i = 0; i < LED_COUNT; i++)
   {
-    leds[i].setRGB(rgb.r, rgb.g, rgb.b);
+    leds[i].setRGB(data.rgb.r, data.rgb.g, data.rgb.b);
   }
-  FastLED.setBrightness(BRIGHT);
+  FastLED.setBrightness(data.BRIGHT);
   FastLED.show();
 }
 
@@ -58,7 +67,7 @@ void clearLED()
 
 void rainbowFade()
 { //-m2-FADE ALL LEDS THROUGH HSV RAINBOW
-  if (lastmillis + SPEED < millis() && power)
+  if (lastmillis + data.SPEED < millis() && data.power)
   {
     ihue++;
     if (ihue > 255)
@@ -69,7 +78,7 @@ void rainbowFade()
     {
       leds[idex] = CHSV(ihue, thissat, 255);
     }
-    LEDS.setBrightness(BRIGHT);
+    LEDS.setBrightness(data.BRIGHT);
     LEDS.show();
     lastmillis = millis();
   }
@@ -77,7 +86,7 @@ void rainbowFade()
 
 void rainbowLoop()
 { //-m3-LOOP HSV RAINBOW
-  if (lastmillis + SPEED < millis() && power)
+  if (lastmillis + data.SPEED < millis() && data.power)
   {
     for(int idex = 0; idex < LED_COUNT; idex++){
       ihue = ihue + STEP;
@@ -88,7 +97,7 @@ void rainbowLoop()
       }
         leds[idex] = CHSV(ihue, thissat, 255);
 
-      FastLED.setBrightness(BRIGHT);
+      FastLED.setBrightness(data.BRIGHT);
       FastLED.show();
       lastmillis = millis();
     }
@@ -97,7 +106,7 @@ void rainbowLoop()
 
 void rainbowCycle(){
   byte r, g, b;
-  if(lastmillis + 500 < millis() && power){
+  if(lastmillis + 500 < millis() && data.power){
     for(uint16_t i = 0; i < 256 * 2; i++){
       for(uint16_t j = 0; j < LED_COUNT; j++){
         byte WheelPos = ((j * 256 / LED_COUNT) + i) & 255;
@@ -118,13 +127,13 @@ void rainbowCycle(){
       }
        FastLED.show();
     }
-    FastLED.setBrightness(BRIGHT);
+    FastLED.setBrightness(data.BRIGHT);
     lastmillis = millis();
   }
 }
 
 void Fire(){
-  if(lastmillis + SPEED < millis() && power){
+  if(lastmillis + 80 < millis() && data.power){
     int temprand;
       for (int i = 0; i < LED_COUNT; i++ ) {
         temprand = random(100, 255);
@@ -132,10 +141,11 @@ void Fire(){
         leds[i].b = 0; leds[i].g = 30;
       }
       LEDS.show();
-    FastLED.setBrightness(BRIGHT);
+    FastLED.setBrightness(data.BRIGHT);
     lastmillis = millis();
   }
 };
+
 
 // конструктор страницы
 void build(GyverPortal &p)
@@ -148,43 +158,43 @@ void build(GyverPortal &p)
 
   GP.BLOCK_BEGIN("Effect");
   GP.SPAN("Effect:");
-  GP.SELECT("Eff_SEL", effects, eff_index, true, 0, 0);
+  GP.SELECT("Eff_SEL", effects, data.eff_index, true, 0, 0);
   GP.RELOAD_CLICK("Eff_SEL");
   GP.BLOCK_END();
   GP.BREAK();
 
   GP.BLOCK_BEGIN("Settings");
   GP.TITLE("Settings");
-  GP.SPAN(effects[eff_index]);
+  GP.SPAN(effects[data.eff_index]);
   GP.BREAK();
-  switch (eff_index)
+  switch (data.eff_index)
   {
   case 0:
     GP.BOX_BEGIN();
     GP.SPAN("POWER:");
-    GP.SWITCH("POWER", power);
+    GP.SWITCH("POWER", data.power);
     GP.BOX_END();
     GP.BOX_BEGIN();
     GP.SPAN("RGB:");
-    GP.COLOR("RGB", rgb);
+    GP.COLOR("RGB", data.rgb);
     GP.BOX_END();
     GP.BOX_BEGIN();
     GP.SPAN("Brightness:");
-    GP.SLIDER("BRIGHT", BRIGHT, 0, 255);
+    GP.SLIDER("BRIGHT", data.BRIGHT, 0, 255);
     GP.BOX_END();
     break;
   case 1:
     GP.BOX_BEGIN();
     GP.SPAN("POWER:");
-    GP.SWITCH("POWER", power);
+    GP.SWITCH("POWER", data.power);
     GP.BOX_END();
     GP.BOX_BEGIN();
     GP.SPAN("Brightness:");
-    GP.SLIDER("BRIGHT", BRIGHT, 0, 255);
+    GP.SLIDER("BRIGHT", data.BRIGHT, 0, 255);
     GP.BOX_END();
     GP.BOX_BEGIN();
     GP.SPAN("Speed:");
-    GP.SLIDER("SPEED", SPEED, 0, 100, 2);
+    GP.SLIDER("SPEED", data.SPEED, 0, 100, 2);
     GP.BOX_END();
     GP.BOX_BEGIN();
     GP.SPAN("Step:");
@@ -195,49 +205,49 @@ void build(GyverPortal &p)
   case 2:
     GP.BOX_BEGIN();
     GP.SPAN("POWER:");
-    GP.SWITCH("POWER", power);
+    GP.SWITCH("POWER", data.power);
     GP.BOX_END();
     GP.BOX_BEGIN();
     GP.SPAN("Brightness:");
-    GP.SLIDER("BRIGHT", BRIGHT, 0, 255);
+    GP.SLIDER("BRIGHT", data.BRIGHT, 0, 255);
     GP.BOX_END();
     GP.BOX_BEGIN();
     GP.SPAN("Speed:");
-    GP.SLIDER("SPEED", SPEED, 0, 100, 2);
+    GP.SLIDER("SPEED", data.SPEED, 0, 100, 2);
     GP.BOX_END();
     break;
   case 3:
     GP.BOX_BEGIN();
     GP.SPAN("POWER:");
-    GP.SWITCH("POWER", power);
+    GP.SWITCH("POWER", data.power);
     GP.BOX_END();
     GP.BOX_BEGIN();
     GP.SPAN("Brightness:");
-    GP.SLIDER("BRIGHT", BRIGHT, 0, 255);
+    GP.SLIDER("BRIGHT", data.BRIGHT, 0, 255);
     GP.BOX_END();
     GP.BOX_BEGIN();
     GP.SPAN("Speed:");
-    GP.SLIDER("SPEED", SPEED, 0, 100, 2);
+    GP.SLIDER("SPEED", data.SPEED, 0, 100, 2);
     GP.BOX_END();
     break;
   case 4:
     GP.BOX_BEGIN();
     GP.SPAN("POWER:");
-    GP.SWITCH("POWER", power);
+    GP.SWITCH("POWER", data.power);
     GP.BOX_END();
     GP.BOX_BEGIN();
     GP.SPAN("Brightness:");
-    GP.SLIDER("BRIGHT", BRIGHT, 0, 255);
+    GP.SLIDER("BRIGHT", data.BRIGHT, 0, 255);
     GP.BOX_END();
     GP.BOX_BEGIN();
     GP.SPAN("Speed:");
-    GP.SLIDER("SPEED", SPEED, 0, 100, 2);
+    GP.SLIDER("SPEED", data.SPEED, 0, 100, 2);
     GP.BOX_END();
     break;
   default:
     break;
   }
-
+  GP.BUTTON("setData", "Save settings");
   GP.BLOCK_END();
   GP.BREAK();
   GP.BUILD_END();
@@ -248,22 +258,27 @@ void action(GyverPortal &p)
 {
   if (p.click())
   {
-    p.clickInt("Eff_SEL", eff_index);
-    p.clickBool("POWER", power);
-    p.clickColor("RGB", rgb);
-    p.clickInt("BRIGHT", BRIGHT);
-    p.clickFloat("SPEED", SPEED);
-    if(!power){
-      currentEffect = -1;
+    p.clickInt("Eff_SEL", data.eff_index);
+    p.clickBool("POWER", data.power);
+    p.clickColor("RGB", data.rgb);
+    p.clickInt("BRIGHT", data.BRIGHT);
+    p.clickFloat("SPEED", data.SPEED);
+    if(!data.power){
+      data.currentEffect = -1;
       clearLED();
     }else{
-      currentEffect = eff_index;
+      data.currentEffect = data.eff_index;
+    }
+    if(p.click("setData")){
+      EEPROM.put(0, data);     // записали в EEPROM
+      EEPROM.commit(); 
     }
   }
   if (p.update())
   {
   }
 }
+
 
 void WebServerTask(void *pvParameters)
 {
@@ -279,7 +294,7 @@ void LEDTask(void *pvParameters)
 {
   while (true)
   {
-    switch (currentEffect)
+    switch (data.currentEffect)
       {
       case 0:
         oneColorAll();
@@ -311,6 +326,12 @@ void setup()
   IPAddress ip(192, 168, 31, 239);
   IPAddress gateway(192, 168, 31, 1);
   IPAddress subnet(255, 255, 255, 0);
+
+  EEPROM.begin(512);
+  EEPROM.get(0, data);
+  Serial.print(data.power);
+  Serial.print(data.BRIGHT);
+  Serial.print(data.SPEED);
 
   FastLED.addLeds<WS2811, LED_PIN, GRB>(leds, LED_COUNT).setCorrection(TypicalLEDStrip);
 
