@@ -7,8 +7,8 @@
 // Global variables
 #define LED_PIN 32
 #define LED_COUNT 180
-#define AP_SSID "Alien"
-#define AP_PASS "bezparolianehodi"
+#define AP_SSID ""
+#define AP_PASS ""
 
 // FastLED
 struct CRGB leds[LED_COUNT];
